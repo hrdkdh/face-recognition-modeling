@@ -108,6 +108,15 @@ plt.legend()
 plt.legend()
 plt.show()
 
+#train accutacy, validation accuracy 그래프 출력
+plt.subplot(1, 2, 2)
+plt.plot(history.history["accuracy"], "g-", label="accuracy")
+plt.plot(history.history["val_accuracy"], "k--", label="val_accuracy")
+plt.xlabel("Epoch")
+plt.ylim(0.7, 1)
+plt.legend()
+plt.show()
+
 print("최종 결과 : ", model.evaluate(x_test, y_test))
 print("클래스 갯수 : ", str(class_counts))
 
