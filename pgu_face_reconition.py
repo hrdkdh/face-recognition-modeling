@@ -108,6 +108,10 @@ while True:
 
         face_height_org = y2 - y1
         face_width_org = x2 - x1
+
+        if face_height_org < 100 or face_width_org < 100:
+            continue
+        
         face_height_center, face_width_center = int(y2 - ((face_height_org)/2)), int(x2 - ((face_width_org)/2))
         this_ratio = face_height_org / face_width_org
     
