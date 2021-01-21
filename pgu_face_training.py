@@ -11,8 +11,9 @@ from sklearn.model_selection import train_test_split
 
 # GPU 메모리 문제 발생 예방
 config = tf.compat.v1.ConfigProto(allow_soft_placement=True)
-config.gpu_options.per_process_gpu_memory_fraction = 0.3
+config.gpu_options.per_process_gpu_memory_fraction = 0.5
 tf.compat.v1.keras.backend.set_session(tf.compat.v1.Session(config=config))
+tf.compat.v1.disable_eager_execution() #GPU 병렬사용을 하기 위해서는 설정해 주어야 함
 
 #libcusolver.so.10 파일이 없어 임의로 복사해 옴
 #sudo cp /home/baekh/anaconda3/lib/libcusolver.so.10 /usr/local/cuda-10.0/targets/x86_64-linux/lib/libcusolver.so.10
@@ -70,33 +71,48 @@ x_train, x_test, y_train, y_test = train_test_split(x_list, y_list, test_size=0.
 #     plt.xlabel(class_name_dic_by_no[y_train[i]])
 # plt.show()
 
-# 네트워크 구조 정의
-model = tf.keras.Sequential([
-    tf.keras.layers.Conv2D(input_shape=(face_height, face_width, 3), kernel_size=(3,3), filters=16, activation="relu"),
-    tf.keras.layers.MaxPool2D(strides=(2,2)),
-    tf.keras.layers.Conv2D(kernel_size=(3,3), filters=64, activation="relu"),
-    tf.keras.layers.MaxPool2D(strides=(2,2)),
-    tf.keras.layers.Conv2D(kernel_size=(3,3), filters=128, activation="relu"),
-    tf.keras.layers.MaxPool2D(strides=(2,2)),
-    tf.keras.layers.Conv2D(kernel_size=(3,3), filters=256, activation="relu"),    
-    tf.keras.layers.Flatten(),
-    tf.keras.layers.Dense(units=128, activation="relu"),
-    tf.keras.layers.BatchNormalization(),
-    tf.keras.layers.Dense(units=128, activation="relu"),
-    tf.keras.layers.Dropout(rate=0.3),
-    tf.keras.layers.Dense(units=128, activation="relu"),
-    tf.keras.layers.Dense(units=class_counts, activation="softmax")
-])
+mirrored_strategy = tf.distribute.MirroredStrategy()
+with mirrored_strategy.scope():
 
-model.compile(optimizer=tf.keras.optimizers.Adam(), 
-              loss="sparse_categorical_crossentropy", 
-              metrics=["accuracy"])
+    # 네트워크 구조 정의. VGG를 차용하여 조금 수정함
+    model = tf.keras.Sequential([
+        tf.keras.layers.Conv2D(input_shape=(face_height, face_width, 3), kernel_size=(3,3), filters=32, padding="same", activation="relu"),
+        tf.keras.layers.Conv2D(kernel_size=(3,3), filters=64, padding="same", activation="relu"),
+        tf.keras.layers.MaxPool2D(strides=(2,2)),
+        tf.keras.layers.Dropout(rate=0.5),
+        tf.keras.layers.Conv2D(kernel_size=(3,3), filters=124, padding="same", activation="relu"),
+        tf.keras.layers.Conv2D(kernel_size=(3,3), filters=256, padding="same", activation="relu"),
+        tf.keras.layers.MaxPool2D(strides=(2,2)),
+        tf.keras.layers.Conv2D(kernel_size=(3,3), filters=512, padding="valid", activation="relu"),
+        tf.keras.layers.MaxPool2D(strides=(2,2)),
+        tf.keras.layers.Dropout(rate=0.5),
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(units=512, activation="relu"),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dense(units=256, activation="relu"),
+        tf.keras.layers.Dropout(rate=0.5),
+        tf.keras.layers.Dense(units=10, activation="relu"),
+        tf.keras.layers.Dense(units=class_counts, activation="softmax")
+    ])
+
+    model.compile(optimizer=tf.keras.optimizers.Adam(), 
+                loss="sparse_categorical_crossentropy", 
+                metrics=["accuracy"])
               
 #계층, 차원, 파라미터 수 요약 확인
 model.summary()
 
 print("클래스 갯수 : " + str(class_counts))
-history = model.fit(x_train, y_train, epochs=3000, validation_split=0.2)
+
+#과적합 방지를 위한 조기종료 콜백 함수 등록 https://wikidocs.net/28147
+# early_stopping = tf.keras.callbacks.EarlyStopping(monitor="val_loss", min_delta=0.05, patience=10, verbose=0, mode="auto")
+# history = model.fit(x_train, y_train, epochs=1000, validation_split=0.25, callbacks=[early_stopping])
+history = model.fit(
+    x_train,
+    y_train,
+    epochs=500
+    # validation_split=0.25
+)
 
 #train loss, validation loss 그래프 출력
 plt.figure(figsize=(12, 4))
@@ -105,8 +121,6 @@ plt.plot(history.history["loss"], "b-", label="loss")
 plt.plot(history.history["val_loss"], "r--", label="val_loss")
 plt.xlabel("Epoch")
 plt.legend()
-plt.legend()
-plt.show()
 
 #train accutacy, validation accuracy 그래프 출력
 plt.subplot(1, 2, 2)
