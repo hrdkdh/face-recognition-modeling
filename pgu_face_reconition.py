@@ -6,11 +6,6 @@ import numpy as np
 import tensorflow as tf
 from datetime import datetime
 
-# GPU 메모리 문제 발생 예방
-config = tf.compat.v1.ConfigProto(allow_soft_placement=True)
-config.gpu_options.per_process_gpu_memory_fraction = 0.3
-tf.compat.v1.keras.backend.set_session(tf.compat.v1.Session(config=config))
-
 def histo_normalize(img):
     img_ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)   # YCrCb 변환
     ycrcb_ch = cv2.split(img_ycrcb)  # 색상 채널 분리
@@ -18,6 +13,15 @@ def histo_normalize(img):
     dst_ycrcb = cv2.merge(ycrcb_ch)   # 색상채널 결합
     dst = cv2.cvtColor(dst_ycrcb, cv2.COLOR_YCrCb2BGR)    # BGR로 변환
     return dst
+
+# GPU 메모리 문제 발생 예방
+config = tf.compat.v1.ConfigProto(allow_soft_placement=True)
+config.gpu_options.per_process_gpu_memory_fraction = 0.3
+tf.compat.v1.keras.backend.set_session(tf.compat.v1.Session(config=config))
+
+# 얼굴판별 모델 경로와 버전 설정
+pgu_face_model_ver = "210122_0959"
+pgu_face_model_dir = "models/pgu_face_model"
 
 #캡처할 영역 사이즈 설정 (4:3)
 face_width = 150
@@ -48,11 +52,9 @@ net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
 net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
 #얼굴판별 모델 로드
-model_pgu = tf.keras.models.model_from_json(open("pgu_face_model_json.json").read())
-model_pgu.load_weights('pgu_face_model_weights.h5')
-
-#얼굴판별 클래스 이름 로드
-pgu_face_class_names_file = "pgu_face_class_names.json"
+model_pgu = tf.keras.models.model_from_json(open(pgu_face_model_dir + "/pgu_face_model_json_" + pgu_face_model_ver + ".json").read())
+model_pgu.load_weights(pgu_face_model_dir + "/pgu_face_model_weights_" + pgu_face_model_ver + ".h5")
+pgu_face_class_names_file = pgu_face_model_dir + "/pgu_face_class_names_" + pgu_face_model_ver + ".json"
 with open(pgu_face_class_names_file, "r") as json_file:
     pgu_face_class_names = json.load(json_file)
 
@@ -68,8 +70,8 @@ print("카메라 원본 너비 :", org_frame_width)   #카메라 가로 픽셀 �
 print("카메라 원본 높이 :", org_frame_height) # 카메라 세로 픽셀 출력
 
 # 카메라 프레임 리사이즈
-res_frame_width = 640
-res_frame_height = 480
+res_frame_width = 1280
+res_frame_height = 720
 print("리사이즈된 너비 :", res_frame_width)   #카메라 가로 픽셀 출력
 print("리사이즈된 높이 :", res_frame_height) # 카메라 세로 픽셀 출력
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, res_frame_width)
@@ -109,7 +111,7 @@ while True:
         face_height_org = y2 - y1
         face_width_org = x2 - x1
 
-        if face_height_org < 100 or face_width_org < 100:
+        if face_height_org < 100 or face_width_org < 75:
             continue
         
         face_height_center, face_width_center = int(y2 - ((face_height_org)/2)), int(x2 - ((face_width_org)/2))

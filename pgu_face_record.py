@@ -132,7 +132,7 @@ while True:
     cv2.imshow("face", face_img)  #출력
     cv2.imshow("frame", frame)  #출력
     #마우스 이벤트 함수 호출
-    cv2.setMouseCallback("frame", onMouse)    
+    cv2.setMouseCallback("frame", onMouse)
 
     if cv2.waitKey(1) == 27:
         break
